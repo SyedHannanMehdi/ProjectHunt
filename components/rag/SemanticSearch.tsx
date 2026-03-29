@@ -1,153 +1,112 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { Search, Loader2, Sparkles, Tag } from "lucide-react";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useState, ChangeEvent } from "react";
+import { Search, Loader2 } from "lucide-react";
 
-interface SearchResult {
+interface Project {
   id: string;
   name: string;
-  tagline: string | null;
-  slug: string;
-  logoUrl: string | null;
-  tags: string[];
-  techStack: string[];
-  category: string | null;
-  upvoteCount: number;
+  description: string;
+  score?: number;
+}
+
+interface SearchResult {
+  project: Project;
   score: number;
 }
 
-export default function SemanticSearch() {
+export function SemanticSearch() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const controllerRef = useRef<AbortController | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setResults([]);
-      setSearched(false);
-      return;
-    }
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value);
+  };
 
-    // Cancel previous in-flight request
-    controllerRef.current?.abort();
-    controllerRef.current = new AbortController();
+  const handleSearch = async () => {
+    if (!query.trim()) return;
 
     setLoading(true);
-    setSearched(true);
+    setError(null);
 
     try {
       const res = await fetch(
-        `/api/rag/search?q=${encodeURIComponent(q)}&limit=8`,
-        { signal: controllerRef.current.signal }
+        `/api/rag/search?q=${encodeURIComponent(query)}&limit=5`
       );
-      if (!res.ok) throw new Error("Search failed");
+
+      if (!res.ok) {
+        throw new Error(`Search failed: ${res.statusText}`);
+      }
+
       const data = await res.json();
       setResults(data.results ?? []);
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name !== "AbortError") {
-        setResults([]);
-      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  const debouncedSearch = useDebounce(doSearch, 500);
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value;
-    setQuery(val);
-    debouncedSearch(val);
-  }
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      {/* Search Input */}
-      <div className="relative">
-        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-          {loading ? (
-            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
-          ) : (
-            <Search className="w-5 h-5 text-muted-foreground" />
-          )}
-        </div>
+    <div className="w-full space-y-4">
+      <div className="flex gap-2">
         <input
           type="text"
           value={query}
           onChange={handleChange}
-          placeholder="Search projects semantically… e.g. 'AI writing tools built with Next.js'"
-          className="w-full rounded-2xl border border-border bg-background pl-12 pr-12 py-3.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-sm"
+          onKeyDown={handleKeyDown}
+          placeholder="Search projects semantically..."
+          className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-          <Sparkles className="w-4 h-4 text-primary/60" />
-        </div>
+        <button
+          onClick={handleSearch}
+          disabled={loading || !query.trim()}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Search className="w-4 h-4" />
+          )}
+          Search
+        </button>
       </div>
 
-      {/* Results */}
-      {searched && (
-        <div className="mt-3 space-y-2">
-          {results.length === 0 && !loading && (
-            <p className="text-center text-sm text-muted-foreground py-8">
-              No matching projects found. Try a different query.
-            </p>
-          )}
+      {error && (
+        <div className="p-3 text-red-600 bg-red-50 border border-red-200 rounded-lg">
+          {error}
+        </div>
+      )}
 
-          {results.map((r) => (
-            <Link
-              key={r.id}
-              href={`/projects/${r.slug}`}
-              className="flex items-start gap-3.5 rounded-2xl border border-border bg-background px-4 py-3.5 hover:bg-muted/40 transition-colors group"
+      {results.length > 0 && (
+        <div className="space-y-3">
+          {results.map(({ project, score }) => (
+            <div
+              key={project.id}
+              className="p-4 border rounded-lg hover:shadow-md transition-shadow"
             >
-              {/* Logo */}
-              {r.logoUrl ? (
-                <Image
-                  src={r.logoUrl}
-                  alt={r.name}
-                  width={44}
-                  height={44}
-                  className="rounded-xl object-cover flex-shrink-0"
-                />
-              ) : (
-                <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center text-base font-bold text-muted-foreground flex-shrink-0">
-                  {r.name[0]}
-                </div>
-              )}
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold truncate">{r.name}</p>
-                  <span className="text-xs text-muted-foreground flex-shrink-0">
-                    {Math.round(r.score * 100)}% match
-                  </span>
-                </div>
-                {r.tagline && (
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                    {r.tagline}
-                  </p>
-                )}
-                {(r.tags.length > 0 || r.techStack.length > 0) && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {[...r.tags, ...r.techStack].slice(0, 5).map((t) => (
-                      <span
-                        key={t}
-                        className="inline-flex items-center gap-1 text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5"
-                      >
-                        <Tag className="w-2.5 h-2.5" />
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                )}
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-semibold text-gray-900">{project.name}</h3>
+                <span className="text-xs text-gray-500 shrink-0">
+                  {(score * 100).toFixed(1)}% match
+                </span>
               </div>
-            </Link>
+              <p className="mt-1 text-sm text-gray-600">{project.description}</p>
+            </div>
           ))}
         </div>
+      )}
+
+      {!loading && results.length === 0 && query && (
+        <p className="text-center text-gray-500 py-4">No results found.</p>
       )}
     </div>
   );
