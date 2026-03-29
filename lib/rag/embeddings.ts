@@ -1,8 +1,3 @@
-/**
- * Embeddings utility for ProjectHunt RAG model
- * Uses OpenAI's text-embedding-ada-002 model to generate embeddings
- */
-
 import OpenAI from "openai";
 
 const openai = new OpenAI({
@@ -10,11 +5,11 @@ const openai = new OpenAI({
 });
 
 /**
- * Generate an embedding vector for a given text string.
+ * Generate an embedding vector for a given text using OpenAI.
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const response = await openai.embeddings.create({
-    model: "text-embedding-ada-002",
+    model: "text-embedding-3-small",
     input: text.replace(/\n/g, " "),
   });
   return response.data[0].embedding;
@@ -24,9 +19,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
  * Compute cosine similarity between two vectors.
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) {
-    throw new Error("Vectors must have the same length");
-  }
+  if (a.length !== b.length) return 0;
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -40,23 +33,24 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /**
- * Build a plain-text document from a project record for embedding.
+ * Build a textual representation of a project for embedding.
  */
-export function buildProjectDocument(project: {
+export function projectToText(project: {
   name: string;
   tagline?: string | null;
   description?: string | null;
   tags?: string[] | null;
   techStack?: string[] | null;
-  creatorName?: string | null;
+  category?: string | null;
 }): string {
   const parts: string[] = [];
   parts.push(`Project: ${project.name}`);
   if (project.tagline) parts.push(`Tagline: ${project.tagline}`);
   if (project.description) parts.push(`Description: ${project.description}`);
-  if (project.tags?.length) parts.push(`Tags: ${project.tags.join(", ")}`);
-  if (project.techStack?.length)
+  if (project.category) parts.push(`Category: ${project.category}`);
+  if (project.tags && project.tags.length > 0)
+    parts.push(`Tags: ${project.tags.join(", ")}`);
+  if (project.techStack && project.techStack.length > 0)
     parts.push(`Tech Stack: ${project.techStack.join(", ")}`);
-  if (project.creatorName) parts.push(`Creator: ${project.creatorName}`);
-  return parts.join("\n");
+  return parts.join(". ");
 }
